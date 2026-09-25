@@ -17,6 +17,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Validate release version
         shell: bash
         env:
@@ -44,11 +47,10 @@ jobs:
         with:
           workspaces: compiler/orchiddb-native
       - name: Build pinned compiler
+        env:
+          ORCHIDDB_RELEASE_BUILD: '1'
         shell: bash
         run: cargo build --locked --release --manifest-path compiler/orchiddb-native/Cargo.toml
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - name: Bundle native compiler
         shell: bash
         run: |
