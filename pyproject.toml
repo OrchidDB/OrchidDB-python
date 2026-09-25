@@ -14,3 +14,6 @@ arrow = ["pyarrow>=18"]
 test = ["pytest>=8", "duckdb>=1.5", "pyarrow>=18", "numpy>=2"]
 [tool.setuptools.package-data]
 orchiddb = ["native/*", "CORE_REVISION"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
