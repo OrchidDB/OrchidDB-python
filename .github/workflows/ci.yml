@@ -1,0 +1,72 @@
+name: Python Arrow integration
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, macos-14, macos-15-intel, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read compiler pins
+        id: pins
+        shell: bash
+        run: |
+          echo "native=$(cat NATIVE_REVISION)" >> "$GITHUB_OUTPUT"
+          echo "core=$(cat CORE_REVISION)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: OrchidDB/OrchidDB-native
+          ref: ${{ steps.pins.outputs.native }}
+          path: compiler/orchiddb-native
+      - uses: actions/checkout@v4
+        with:
+          repository: OrchidDB/OrchidDB
+          ref: ${{ steps.pins.outputs.core }}
+          path: compiler/orchiddb
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: compiler/orchiddb-native
+      - name: Build pinned compiler
+        shell: bash
+        run: cargo build --locked --release --manifest-path compiler/orchiddb-native/Cargo.toml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bundle native compiler
+        shell: bash
+        run: |
+          mkdir -p src/orchiddb/native
+          case "$RUNNER_OS" in
+            macOS) lib=liborchiddb_compiler.dylib ;;
+            Linux) lib=liborchiddb_compiler.so ;;
+            Windows) lib=orchiddb_compiler.dll ;;
+          esac
+          cp "compiler/orchiddb-native/target/release/$lib" src/orchiddb/native/
+      - name: Test and package
+        shell: bash
+        run: |
+          python -m pip install -e '.[test]' build
+          python -m pytest -q
+          python examples/people.py
+          python -m build --wheel
+      - name: Repair Linux wheel
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          python -m pip install auditwheel patchelf
+          auditwheel repair dist/*.whl -w wheelhouse
+          rm dist/*.whl
+          mv wheelhouse/*.whl dist/
+      - name: Verify installed wheel
+        shell: bash
+        run: |
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          python -m pytest -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*.whl
