@@ -6,6 +6,10 @@ on:
         description: Branch, commit, or existing version tag (v0.1.0)
         required: true
         default: main
+      release_id:
+        description: GitHub draft release ID containing locally built packages (skip all builds)
+        required: false
+        default: ''
       publish:
         description: Publish verified wheels to PyPI (requires a matching version tag)
         type: boolean
@@ -14,6 +18,7 @@ permissions:
   contents: read
 jobs:
   build:
+    if: ${{ inputs.release_id == '' }}
     strategy:
       matrix:
         os: [ubuntu-22.04, macos-14, macos-15-intel, windows-2022]
@@ -85,7 +90,7 @@ jobs:
           name: wheels-${{ matrix.os }}
           path: dist/*.whl
   publish:
-    if: ${{ inputs.publish }}
+    if: ${{ inputs.publish && inputs.release_id == '' }}
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
@@ -97,4 +102,32 @@ jobs:
           pattern: wheels-*
           path: dist
           merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-local:
+    if: ${{ inputs.publish && inputs.release_id != '' }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_ID: ${{ inputs.release_id }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Download the locally validated release packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          [[ "$RELEASE_TAG" == v0.1.0 ]]
+          actual_tag=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID" --jq .tag_name)
+          test "$actual_tag" = "$RELEASE_TAG"
+          mkdir dist
+          gh release download "$RELEASE_TAG" --dir dist --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS
+          cd dist
+          sha256sum --check SHA256SUMS
+          rm SHA256SUMS
       - uses: pypa/gh-action-pypi-publish@release/v1
