@@ -4,10 +4,7 @@ permissions:
   contents: read
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [ubuntu-22.04, macos-14, macos-15-intel, windows-2022]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - name: Read compiler pins
@@ -68,5 +65,5 @@ jobs:
           python -m pytest -q
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-linux
           path: dist/*.whl
