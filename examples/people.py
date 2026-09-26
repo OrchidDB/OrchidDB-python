@@ -8,6 +8,10 @@ graph = Graph(Compiler(), DuckDBEngine(connection),
     nodes=[{"label":"Person","table":"people","id":"id","properties":{"name":"name"}}])
 with graph.query_arrow("MATCH (p:Person) RETURN p.name AS name") as reader:
     print(reader.schema)
+    names = []
     for batch in reader:
         print(batch)
+        names.extend(batch.column("name").to_pylist())
+    assert sorted(names) == ["Ada", "Grace"]
+assert connection.execute("SELECT 42").fetchone() == (42,)
 connection.close()

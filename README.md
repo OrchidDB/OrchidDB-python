@@ -5,13 +5,15 @@ and consume Arrow batches. No DuckDB driver is bundled or imported by the librar
 The compiler does not touch your data. Graph mapping and schema metadata are explicit.
 
 ```sh
-python -m pip install -e '.[test]'
-export ORCHIDDB_NATIVE_LIBRARY=/absolute/path/liborchiddb_compiler.dylib
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -r examples/requirements.txt
 python examples/people.py
-pytest
 ```
 
-Build the matching native compiler from [OrchidDB-native](https://github.com/OrchidDB/OrchidDB-native)
+The example installs `orchiddb[arrow]==0.1.0` from PyPI and its application-owned DuckDB driver. The wheel includes the compiler for macOS 26+ ARM64; no library path is needed.
+
+For source development on other platforms, build the matching native compiler from [OrchidDB-native](https://github.com/OrchidDB/OrchidDB-native)
 using `NATIVE_REVISION` and its pinned `CORE_REVISION`. Release wheels bundle this
 compiler for their platform; source installs require the explicit library path.
 No network downloads happen at import time. ABI and core revision are validated. An explicit development library may report
@@ -50,9 +52,7 @@ connections, Arrow allocation, caches and transaction boundaries.
 CI builds pinned native code and runs real Arrow/DuckDB tests. The manual release
 workflow requires a matching `v0.1.0` tag, builds platform wheels, and publishes to
 PyPI via trusted publishing. Configure PyPI's `orchiddb` trusted publisher for this
-repository, workflow `release.yml`, environment `pypi`. The package name was
-unregistered when checked; this does not reserve it. No release is published until
-maintainers configure the registry and dispatch the workflow.
+repository, workflow `release.yml`, environment `pypi`. Version 0.1.0 is published on PyPI.
 
 Licensed under [the OrchidDB GPL-3.0-only license](LICENSE.md).
 
