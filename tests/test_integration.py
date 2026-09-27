@@ -53,7 +53,7 @@ def test_injection_is_literal(graph):
 
 def test_sparql_constant(graph):
     with graph.query_arrow("SELECT (42 AS ?answer) WHERE {}", language="sparql") as reader:
-        assert reader.read_all().num_rows == 1
+        assert reader.read_all().column(0).to_pylist() == [42]
 
 def test_consumer_exception_and_database_error_release_lease(graph):
     with pytest.raises(ZeroDivisionError):
@@ -66,3 +66,13 @@ def test_consumer_exception_and_database_error_release_lease(graph):
             pass
     with graph.query_arrow("RETURN 42 AS answer") as reader:
         assert reader.read_all().column(0).to_pylist() == [42]
+
+def test_rdf_rules_query_the_same_application_table(graph):
+    rdf = Graph(graph.compiler, graph.engine, tables=graph.metadata['tables'], rdf=[{
+        'table': 'people',
+        'subject': {'kind': 'template', 'prefix': 'urn:person:', 'columns': ['id']},
+        'predicate': {'kind': 'constant', 'value': 'urn:name'},
+        'object': {'kind': 'literal', 'column': 'name'},
+    }])
+    with rdf.query_arrow('SELECT ?name WHERE {?s <urn:name> ?name} ORDER BY ?name', language='sparql') as reader:
+        assert reader.read_all().column(0).to_pylist() == ['Ada', 'Grace']

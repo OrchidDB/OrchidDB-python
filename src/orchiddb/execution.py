@@ -41,10 +41,14 @@ class DuckDBEngine:
                 self._lease.release()
 
 class Graph:
-    def __init__(self, compiler: Compiler, engine: ArrowEngine, *, tables, nodes, edges=(), functions=(), ontology=None):
+    def __init__(self, compiler: Compiler, engine: ArrowEngine, *, tables, nodes=(), edges=(), functions=(), ontology=None, rdf=(), dataset="default"):
         import copy
         self.compiler, self.engine = compiler, engine
         self.metadata = copy.deepcopy(dict(tables=tables, nodes=nodes, edges=list(edges), functions=list(functions), ontology=ontology or {}))
+        if rdf:
+            self.metadata["rdf"] = copy.deepcopy(list(rdf))
+        if dataset != "default":
+            self.metadata["dataset"] = dataset
 
     def plan(self, query: str, *, language="cypher", parameters=None):
         return self.compiler.compile(dict(self.metadata, version=1, dialect=self.engine.dialect, language=language, query=query, parameters=parameters or {}))

@@ -59,3 +59,10 @@ Licensed under [the OrchidDB GPL-3.0-only license](LICENSE.md).
 DuckDB Arrow export follows its [Python Arrow API](https://duckdb.org/docs/current/guides/python/export_arrow).
 Arrow batching does not itself guarantee that an engine streams query execution;
 execution buffering and cancellation remain backend-specific.
+
+RDF vocabulary can reference the same application tables: pass `rdf=[...]` and
+optionally `dataset="default"` to `Graph`, then use `language="sparql"`. Each rule
+contains `table`, `subject`, `predicate`, and `object` term mappings. For example,
+`{"kind":"template","prefix":"urn:person:","columns":["id"]}` constructs a
+subject and `{"kind":"literal","column":"name"}` exposes a property. These
+rules require a native compiler built with the shared RDF mapping API.
