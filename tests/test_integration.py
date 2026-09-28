@@ -76,3 +76,29 @@ def test_rdf_rules_query_the_same_application_table(graph):
     }])
     with rdf.query_arrow('SELECT ?name WHERE {?s <urn:name> ?name} ORDER BY ?name', language='sparql') as reader:
         assert reader.read_all().column(0).to_pylist() == ['Ada', 'Grace']
+
+
+def test_generate_persist_and_reuse_statistics_all_languages(graph, tmp_path):
+    analysis = graph.generate_statistics()
+    assert analysis['snapshot']['sources']['people']['sample_rows'] == 3
+    assert analysis['snapshot']['sources']['people']['estimated_rows'] == 3
+    assert analysis['report']['accepted_rows'] >= 3
+    queries = [('cypher', "MATCH (p:Person) WHERE p.name = 'Ada' RETURN p.name"),
+               ('gremlin', "g.V().hasLabel('Person').has('name', 'Ada').values('name')"),
+               ('sparql', 'SELECT (42 AS ?answer) WHERE {}')]
+    for language, query in queries:
+        plan = graph.plan(query, language=language)
+        assert 'logical_plan' in plan.diagnostics
+        with graph.engine.query_arrow(plan) as reader:
+            assert reader.read_all().num_rows == 1
+    path = tmp_path / 'statistics.json'
+    graph.save_statistics(path)
+    old = graph.compiler._catalog_id
+    graph.clear_statistics()
+    graph.load_statistics(path)
+    assert graph.compiler._catalog_id != old
+    assert graph.compiler.statistics_snapshot == analysis['snapshot']
+    assert graph.compiler.statistics_report == analysis['report']
+    with graph.query_arrow('MATCH (p:Person) RETURN count(p) AS n') as reader:
+        assert reader.read_all().column(0).to_pylist() == [3]
+    graph.clear_statistics()

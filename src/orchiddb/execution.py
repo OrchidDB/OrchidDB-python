@@ -40,11 +40,36 @@ class DuckDBEngine:
             finally:
                 self._lease.release()
 
+    @contextmanager
+    def statistics_arrow(self, request):
+        """Bounded statistics reader on the same transaction, with interruption."""
+        from threading import Timer
+        if not self._lease.acquire(blocking=False):
+            raise RuntimeError("An Arrow reader is already active on this engine")
+        reader = None
+        timer = Timer(request["timeout_ms"] / 1000, self.connection.interrupt)
+        timer.daemon = True
+        try:
+            timer.start()
+            reader = self.connection.execute(request["sql"]).to_arrow_reader(min(4096, request["max_rows"]))
+            yield reader
+        finally:
+            timer.cancel()
+            timer.join()
+            try:
+                if reader is not None:
+                    reader.close()
+            finally:
+                self._lease.release()
+
 class Graph:
-    def __init__(self, compiler: Compiler, engine: ArrowEngine, *, tables, nodes=(), edges=(), functions=(), ontology=None, rdf=(), dataset="default"):
+    def __init__(self, compiler: Compiler, engine: ArrowEngine, *, tables, nodes=(), edges=(), functions=(), ontology=None, rdf=(), dataset="default", logical_sources=(), collection_sources=(), representation_sources=()):
         import copy
         self.compiler, self.engine = compiler, engine
         self.metadata = copy.deepcopy(dict(tables=tables, nodes=nodes, edges=list(edges), functions=list(functions), ontology=ontology or {}))
+        for name, value in (("logical_sources", logical_sources), ("collection_sources", collection_sources), ("representation_sources", representation_sources)):
+            if value:
+                self.metadata[name] = copy.deepcopy(value)
         if rdf:
             self.metadata["rdf"] = copy.deepcopy(list(rdf))
         if dataset != "default":
@@ -55,3 +80,15 @@ class Graph:
 
     def query_arrow(self, query: str, *, language="cypher", parameters=None, batch_size=65536):
         return self.engine.query_arrow(self.plan(query, language=language, parameters=parameters), batch_size)
+
+    def generate_statistics(self):
+        return self.compiler.generate_statistics(dict(self.metadata, version=1, dialect=self.engine.dialect, language="cypher", query="RETURN 1"), self.engine)
+
+    def clear_statistics(self):
+        self.compiler.clear_statistics()
+
+    def save_statistics(self, path):
+        self.compiler.save_statistics(path)
+
+    def load_statistics(self, path):
+        self.compiler.load_statistics(path)

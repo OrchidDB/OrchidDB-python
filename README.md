@@ -66,3 +66,37 @@ contains `table`, `subject`, `predicate`, and `object` term mappings. For exampl
 `{"kind":"template","prefix":"urn:person:","columns":["id"]}` constructs a
 subject and `{"kind":"literal","column":"name"}` exposes a property. These
 rules require a native compiler built with the shared RDF mapping API.
+
+## Generate statistics once
+
+```python
+report = graph.generate_statistics()  # bounded reads on graph.engine's session
+plan = graph.plan("MATCH (p:Person) WHERE p.name = 'Ada' RETURN p.name")
+print(plan.diagnostics)                # estimates and physical-source choices
+print(report["report"])               # collection coverage and any skipped work
+graph.save_statistics("statistics.json")
+graph.clear_statistics()               # subsequent plans use no generated statistics
+graph.load_statistics("statistics.json")
+```
+
+Generation is optional and explicit. Shared Rust code decides what to collect
+and calculates the statistics. Python forwards bounded Arrow IPC batches; it
+does not implement an estimator. The retained native catalog is automatically
+used by later compilations, including Cypher, Gremlin, and SPARQL. Regeneration
+replaces it only after finishing; interruption preserves the previous catalog.
+`Compiler.close()` releases the retained catalog and never closes your database.
+
+`DuckDBEngine` uses the caller's connection and transaction, closes result
+readers, and interrupts requests at their deadline. Custom adapters can provide
+`statistics_arrow(request)` as a context manager yielding Arrow batches, while
+enforcing `timeout_ms`, `max_rows`, and `max_bytes` during acquisition/reading.
+Without a bounded adapter, collection reports skipped work. Application-owned
+collection drivers can also call `Compiler.statistics_command(command)` directly.
+No background refresh, profiles, or tuning tiers are involved. The snapshot
+records its mapping identity; regenerate after changing mappings or source data.
+Compilation does not read the database.
+
+`Graph` accepts `logical_sources`, `collection_sources`, and
+`representation_sources` alongside existing mappings. Full native plan fields
+are retained in `CompiledQuery.diagnostics`. A compiler retains one catalog;
+use a separate compiler instance for each independently analyzed mapping.
