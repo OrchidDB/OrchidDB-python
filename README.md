@@ -100,3 +100,24 @@ Compilation does not read the database.
 `representation_sources` alongside existing mappings. Full native plan fields
 are retained in `CompiledQuery.diagnostics`. A compiler retains one catalog;
 use a separate compiler instance for each independently analyzed mapping.
+
+## Permission pushdown
+
+Pass permission scopes on node mappings and a principal on each protected query. The helpers build provider-neutral request data; the relation must contain effective grants for that principal.
+
+```python
+from orchiddb import Authorization, PermissionRelation, PermissionScope
+
+grant_source = "effective_grants"
+nodes = [{
+    "label": "Document", "table": "documents", "id": "id",
+    "properties": {"title": "title", "project_id": "project_id"},
+    "permission_scopes": [
+        PermissionScope("id", PermissionRelation.flat(grant_source, "document", "view")).to_dict(),
+        PermissionScope("project_id", PermissionRelation.flat(grant_source, "project", "view")).to_dict(),
+    ],
+}]
+graph = Graph(compiler, engine, tables=tables, nodes=nodes)
+with graph.query_arrow("MATCH (d:Document) RETURN d.title", authorization=Authorization("user", "alice")) as reader:
+    result = reader.read_all()
+```

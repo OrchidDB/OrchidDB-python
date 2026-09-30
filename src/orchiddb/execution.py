@@ -75,11 +75,16 @@ class Graph:
         if dataset != "default":
             self.metadata["dataset"] = dataset
 
-    def plan(self, query: str, *, language="cypher", parameters=None):
-        return self.compiler.compile(dict(self.metadata, version=1, dialect=self.engine.dialect, language=language, query=query, parameters=parameters or {}))
+    def plan(self, query: str, *, language="cypher", parameters=None, authorization=None):
+        request = dict(self.metadata, version=1, dialect=self.engine.dialect,
+                       language=language, query=query, parameters=parameters or {})
+        if authorization is not None:
+            request["authorization"] = authorization.to_dict() if hasattr(authorization, "to_dict") else dict(authorization)
+        return self.compiler.compile(request)
 
-    def query_arrow(self, query: str, *, language="cypher", parameters=None, batch_size=65536):
-        return self.engine.query_arrow(self.plan(query, language=language, parameters=parameters), batch_size)
+    def query_arrow(self, query: str, *, language="cypher", parameters=None, authorization=None, batch_size=65536):
+        return self.engine.query_arrow(self.plan(query, language=language, parameters=parameters,
+                                                 authorization=authorization), batch_size)
 
     def generate_statistics(self):
         return self.compiler.generate_statistics(dict(self.metadata, version=1, dialect=self.engine.dialect, language="cypher", query="RETURN 1"), self.engine)

@@ -2,7 +2,7 @@ import os
 import duckdb
 import pyarrow as pa
 import pytest
-from orchiddb import Compiler, DuckDBEngine, Graph, CompilationError
+from orchiddb import Authorization, Compiler, DuckDBEngine, Graph, CompilationError, PermissionRelation, PermissionScope
 
 @pytest.fixture
 def graph():
@@ -50,6 +50,28 @@ def test_injection_is_literal(graph):
     with graph.query_arrow("MATCH (p:Person) WHERE p.name=$name RETURN p.name", parameters={"name":"Ada'; DROP TABLE people; --"}) as reader:
         assert reader.read_all().num_rows == 0
     assert graph.engine.connection.execute("SELECT count(*) FROM people").fetchone() == (3,)
+
+def test_permission_scopes_filter_direct_and_project_grants():
+    connection = duckdb.connect()
+    connection.execute("CREATE TABLE documents(id BIGINT, project_id BIGINT, title VARCHAR)")
+    connection.execute("INSERT INTO documents VALUES (1,10,'direct'),(2,20,'project'),(3,30,'denied')")
+    connection.execute("CREATE TABLE effective_grants(resource_type VARCHAR, resource_rel VARCHAR, resource_id VARCHAR, subject_type VARCHAR, subject_rel VARCHAR, subject_id VARCHAR)")
+    connection.execute("INSERT INTO effective_grants VALUES ('document','view','1','user','','alice'),('project','view','20','user','','alice'),('project','view','30','user','','bob')")
+    scopes = [
+        PermissionScope("id", PermissionRelation.flat("effective_grants", "document", "view")).to_dict(),
+        PermissionScope("project_id", PermissionRelation.flat("effective_grants", "project", "view")).to_dict(),
+    ]
+    graph = Graph(Compiler(), DuckDBEngine(connection), tables=[
+        {"name":"documents", "columns":[{"name":"id","data_type":"int64"},{"name":"project_id","data_type":"int64"},{"name":"title","data_type":"string"}]},
+        {"name":"effective_grants", "columns":[{"name":name,"data_type":"string"} for name in ("resource_type","resource_rel","resource_id","subject_type","subject_rel","subject_id")]},
+    ], nodes=[{"label":"Document","table":"documents","id":"id","properties":{"title":"title","project_id":"project_id"},"permission_scopes":scopes}])
+    try:
+        with graph.query_arrow("MATCH (d:Document) RETURN d.title AS title ORDER BY title", authorization=Authorization("user", "alice")) as reader:
+            assert reader.read_all().column(0).to_pylist() == ["direct", "project"]
+        with pytest.raises(CompilationError, match="requires a principal"):
+            graph.plan("MATCH (d:Document) RETURN d.title")
+    finally:
+        connection.close()
 
 def test_sparql_constant(graph):
     with graph.query_arrow("SELECT (42 AS ?answer) WHERE {}", language="sparql") as reader:
