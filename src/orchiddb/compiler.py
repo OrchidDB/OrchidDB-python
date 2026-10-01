@@ -56,6 +56,19 @@ class Compiler:
             raise CompilationError(response["error"])
         return response["result"]
 
+    def bind_arrow(self, plan, relation, reader):
+        """Bind Arrow rows into a SELECT statement without database-side setup."""
+        import base64
+        import pyarrow as pa
+        sink = pa.BufferOutputStream()
+        with pa.ipc.new_stream(sink, reader.schema) as writer:
+            for batch in reader:
+                writer.write_batch(batch)
+        result = self._call(self._lib.orchiddb_compile_json, dict(
+            op="bind", plan=dict(plan.diagnostics, version=plan.version, sql=plan.sql, dialect=plan.dialect, fields=list(plan.fields)), relation=relation,
+            ipc=base64.b64encode(sink.getvalue()).decode("ascii")))
+        return CompiledQuery(result["sql"], tuple(result["fields"]), result["dialect"], result["version"], result)
+
     def statistics_command(self, command):
         """Shared collection protocol for application-owned database sessions."""
         return self._call(self._lib.orchiddb_statistics_json, command)
