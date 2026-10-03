@@ -91,7 +91,9 @@ jobs:
           ref: ${{ steps.pins.outputs.core }}
           path: compiler/orchiddb
       - uses: dtolnay/rust-toolchain@stable
+        if: inputs.native_run_id == ''
       - uses: Swatinem/rust-cache@v2
+        if: inputs.native_run_id == ''
         with:
           workspaces: compiler/orchiddb-native
       - name: Build pinned compiler
