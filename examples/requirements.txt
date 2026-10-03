@@ -1,2 +1,2 @@
-orchiddb[arrow]==0.1.0
+orchiddb[arrow]==0.2.0
 duckdb==1.5.2

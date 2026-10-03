@@ -43,8 +43,8 @@ managed engine's conformance suite. Parameters are specialized into SQL; recompi
 when values or metadata change. Unsupported queries raise `CompilationError`.
 
 Implement the `ArrowEngine` protocol for another backend: provide `dialect` and a
-context manager yielding a `pyarrow.RecordBatchReader`. PostgreSQL SQL rendering
-is supported by core; cross-engine federation is not implemented. Caller controls
+context manager yielding a `pyarrow.RecordBatchReader`. `PostgresEngine` and
+`query_federated` support PostgreSQL and mixed DuckDB/PostgreSQL execution. Caller controls
 connections, Arrow allocation, caches and transaction boundaries.
 
 ## Releases
