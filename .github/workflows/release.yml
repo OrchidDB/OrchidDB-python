@@ -10,6 +10,10 @@ on:
         description: Verified native compiler workflow run (optional)
         required: false
         default: ''
+      windows_native_run_id:
+        description: Optional Windows artifact run when it differs from the other platforms
+        required: false
+        default: ''
       release_id:
         description: GitHub draft release ID containing locally built packages (skip all builds)
         required: false
@@ -46,7 +50,7 @@ jobs:
         if: inputs.native_run_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          NATIVE_RUN_ID: ${{ inputs.native_run_id }}
+          NATIVE_RUN_ID: ${{ runner.os == 'Windows' && inputs.windows_native_run_id || inputs.native_run_id }}
         shell: bash
         run: |
           python - <<'PYTHON'
